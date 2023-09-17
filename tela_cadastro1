@@ -3,7 +3,7 @@ from optparse import Values
 import PySimpleGUI as sg
 import sqlite3 as bbb
 
-conn = bbb.connect("Desktop/FelipeVitor/clientes.db")
+conn = bbb.connect("clientes.db")
 c = conn.cursor()
 
 layout = [
