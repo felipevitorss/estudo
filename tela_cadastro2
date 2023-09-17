@@ -4,7 +4,7 @@ import PySimpleGUI as sg
 import sqlite3 as bbb
 
 #criar a conexão e interage com o banco
-conn = bbb.connect("Desktop/FelipeVitor/clientes.db")
+conn = bbb.connect("clientes.db")
 c = conn.cursor()
 
 #criar o layout
