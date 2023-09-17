@@ -1,0 +1,582 @@
+import PySimpleGUI as sg
+import sqlite3 as bbb
+
+#criar a conexão e interage com o banco
+conn = bbb.connect("mercadinho.db")
+c = conn.cursor()
+
+layout = [
+# [MENU PRINCIPAL, [Submenu, Submenu, Submenu] ]    
+[sg.Menu([
+     ['Cadastro', ['Cadastro Clientes', 'Cadastrar Produtos' ,'Cadastrar Fornecedores', 'Cadastrar Transportadora']],
+     ['Consulta', ['Consultar Clientes', 'Consultar Produtos' ,'Consultar Fornecedores', 'Consultar Transportadora']],
+     ['Relatório', ['Relatório Clientes', 'Relatório Produtos' ,'Relatório Fornecedores', 'Relatório Transportadora']]
+ ],
+ tearoff=False)]
+
+]
+
+#Criar a janela principal e chamar os componentes desta na janela
+# WINDOW (nome da janela, componentes, tamanho da janela)
+# MUDAR A FONTE E HABILITAR O BOTÃO MAXIMIZAR: font=font_programa,resizable=True
+window = sg.Window("Sistema de vendas 1.0",layout,size=(600,400))
+
+
+while True:
+    event, values = window.read()
+    if event == sg.WINDOW_CLOSED:
+        break
+
+
+#Acessa o submenu CADASTRO -> Cadastro clientes
+    if event == 'Cadastro Clientes':
+        
+        #criar layout clientes
+        cadastro_clientes_layout = [
+            [sg.Text("Nome")],
+            [sg.InputText(key="Nome")],
+            [sg.Text("CPF")],
+            [sg.InputText(key="CPF")],
+            [sg.Text("Endereco")],
+            [sg.InputText(key="Endereco")],
+            [sg.Text("Telefone")],
+            [sg.InputText(key="Telefone")],
+            [sg.Text("Cidade")],
+            [sg.InputText(key="Cidade")],
+            [sg.Text("Estado")],
+            [sg.InputText(key="Estado")],
+            [sg.Button("Cadastrar")],
+            [sg.Button("Cancelar")]
+        ]
+
+        clientes_window = sg.Window ("Cadastro de Clientes",cadastro_clientes_layout,size = (600,400))
+
+        while True:
+            event, values = clientes_window.read()
+
+            if event == sg.WINDOW_CLOSED or event == 'Cancelar':
+                clientes_window.close()
+                break
+
+            #Interação com o banco
+            c.execute("INSERT INTO clientes (Nome, CPF, Endereco, Telefone, Cidade, Estado) VALUES (?, ?, ?, ?, ?, ?)", (values["Nome"], values["CPF"], values["Endereco"], values["Telefone"], values["Cidade"], values["Estado"]))
+            conn.commit()
+
+             #Limpar iputs após o cadastro
+            clientes_window["Nome"].update("")
+            clientes_window["CPF"].update("")
+            clientes_window["Endereco"].update("")
+            clientes_window["Telefone"].update("")
+            clientes_window["Cidade"].update("")
+            clientes_window["Estado"].update("")
+        
+
+            #Configurar o cadastro
+            sg.popup("Cadastro realizado com sucesso!", title="Cadastro")
+
+
+             #Tela de Consulta de Clientes COM UPDATE e DELETE
+    elif event == "Consultar Clientes":
+                
+         #Função para editar/atualizar o registro
+         def edit_record(new_client, new_value, old_client):
+            c.execute("UPDATE clientes SET nome=?, cpf=? WHERE nome=?", (new_client, new_value, old_client))
+            conn.commit()
+
+         #Deleta o registro escolhido
+         def delete_record(client_to_delete):
+             c.execute("DELETE FROM clientes WHERE nome=?",(client_to_delete,))
+             conn.commit()
+                
+    
+            #Layout de consulta de clientes
+         consulta_clientes_layout = [
+                    [sg.Text("CPF")],
+                    [sg.InputText(key="CPF")],
+                    [sg.Button("Consulta")],
+                    [sg.Table(values=[], headings=["Nome","CPF"], display_row_numbers=False, num_rows=10, auto_size_columns=False, key="tabela")],
+                    [sg.Button("Editar")],
+                    [sg.Button("Excluir")],
+                    [sg.Button("Cancelar")]  
+                    ] 
+
+         consulta_window = sg.Window("Consulta de Clientes", consulta_clientes_layout, resizable=True)
+
+            #Loop de eventos
+         while True:
+                    event,values = consulta_window.read()
+
+                    if event == sg.WINDOW_CLOSED or event == "Cancelar":
+                         consulta_window.close()
+                         break
+                    
+                    #Consultar registros
+                    if event == "Consulta":
+                        cliente_busca = values["CPF"].upper()
+                        c.execute("SELECT nome, cpf FROM clientes WHERE UPPER(CPF) = ?", (cliente_busca,))
+                        registros = c.fetchall()
+
+                        consulta_window["tabela"].update(values=registros)
+                   
+                    #Editar/atualizar um registro
+                    elif event =="Editar":
+                         selected_row = values['tabela']
+                         if selected_row:
+                              selected_row_index = selected_row[0]
+                              row_data = registros[selected_row_index]
+                              edited_client = sg.popup_get_text("Editar Cliente:", default_text=row_data[0])
+                              if edited_client is not None:
+                                   old_client = row_data[0]
+                                   edit_record(edited_client, row_data[1], old_client)
+                                   registros[selected_row_index] = (edited_client, row_data[1])
+                                   consulta_window['tabela'].update(values=registros)
+
+                    #Excluir um registro
+                    elif event =="Excluir":
+                         selected_row = values['tabela']
+                         if selected_row:
+                              selected_row_index = selected_row[0]
+                              row_data = registros[selected_row_index]
+                              if sg.popup_yes_no("Tem certeza que deseja excluir este registro ?", title="Confirmação") =="Yes":
+                                   client_to_delete = row_data[0]
+                                   delete_record(client_to_delete)
+                                   registros.pop(selected_row_index)
+                                   consulta_window['tabela'].update(values=registros)             
+
+         consulta_window.close()
+        
+
+    #Relatório de Clientes        
+    elif event == 'Relatório Clientes':
+         
+         #Abre a tela de relatório de clientes
+         relatorio_layout_clientes = [
+              [sg.Text("CPF")],
+              [sg.InputText(key="CPF")],
+              [sg.Button("Gerar relatório"), sg.Button("Cancelar")]
+         ]
+         relatorio_clientes = sg.Window("Relatório de Clientes", relatorio_layout_clientes, resizable=True)
+         #Loop de eventos
+         while True:
+              event, values = relatorio_clientes.read()
+              if event == sg.WIN_CLOSED or event == "Cancelar":
+                   break
+              #Consulte o banco de dados para obter o cliente e gerar o relatório
+              cliente_busca = values["CPF"].upper()
+              c.execute("SELECT * FROM Clientes WHERE UPPER(CPF) = ?", (cliente_busca,))
+              registro = c.fetchone()
+              if registro:
+                   with open("relatorio.html", "w") as f:
+                        f.write("<html><head></head><body>")
+                        f.write("<h1>Relatório</h1><table border ='1'><tr><th>Nome</th><th>CPF</th><th>Endereco</th><th>Telefone</th><th>Cidade</th><th>Estado</th></tr>")
+                        f.write(f"<tr><td>{registro[0]}</td><td>{registro[1]}</td><td>{registro[2]}</td><td>{registro[3]}</td><td>{registro[4]}</td><td>{registro[5]}</td><tr>")
+                        f.write("</body><html>")
+                   sg.popup("Relatório gerado com sucesso!", title="Relatório")
+
+              else:
+                   sg.popup("Cliente não encontrado no banco de dados!", title="Relatório")
+            
+              #Limpar inputs
+              relatorio_clientes["CPF"].upper("")
+         relatorio_clientes.close()  
+
+
+        #Cadastro de Produtos
+    elif event == "Cadastrar Produtos":
+   
+    #Layout de cadastro de produtos
+        cadastro_produtos_layout = [
+            [sg.Text("Produto")],
+            [sg.InputText(key="Produto")],
+            [sg.Text("Valor")],
+            [sg.InputText(key="Valor")],
+            [sg.Button("Cadastrar")],
+            [sg.Button("Cancelar")]
+
+        ]
+
+        cadastro_window = sg.Window("Cadastro de produtos", cadastro_produtos_layout,size=(400,200))
+
+        while True:
+            event, values = cadastro_window.read()
+
+            if event == sg.WINDOW_CLOSED or event == 'Cancelar':
+                cadastro_window.close()
+                break
+
+        #interação com o banco
+            c.execute( "INSERT INTO Produtos (Produto, Valor) VALUES (?, ?)", (values["Produto"], values["Valor"]))
+            conn.commit()
+
+            #Limpar iputs após o cadastro
+            cadastro_window["Produto"].update("")
+            cadastro_window["Valor"].update("")
+
+        #configurar o cadastro
+            sg.popup("Cadastro realizado com sucesso!")
+
+            cadastro_window.close()
+
+            #Consulta de Produtos com UPDATE E DELETE
+    elif event == "Consultar Produtos":
+            
+            #Função para editar/atualizar o registro
+            def edit_record(new_product, new_values, old_product):
+                 c.execute("UPDATE Produtos SET Produto=?, Valor=? WHERE Produto=?", (new_product, new_values, old_product))
+                 conn.commit()
+
+            #Função para deletar o registro escolhido
+            def delete_record(product_to_delete):
+                 c.execute("DELETE FROM Produtos WHERE Produto=?",(product_to_delete,))
+                 conn.commit()
+
+           #Layout de consulta de produtos
+            consulta_produtos_layout = [
+                [sg.Text("Produto")],
+                [sg.InputText(key="Produto")],
+                [sg.Button("Consulta")],
+                [sg.Table(values=[], headings=["Produto","Valor"], display_row_numbers=False, num_rows=1,auto_size_columns=False, key="tabela", expand_x=True)],
+                [sg.Button("Editar")],
+                [sg.Button("Excluir")],
+                [sg.Button("Cancelar")], 
+                ] 
+
+            produto_consulta_window = sg.Window("Consulta de produtos", consulta_produtos_layout, resizable=True)
+
+            #Loop de eventos
+            while True:
+                event,values = produto_consulta_window.read()
+
+                if event == sg.WINDOW_CLOSED or event == "Cancelar":
+                    produto_consulta_window.close()
+                    break
+                
+                #Consultar registros
+                if event =='Consulta':
+                    produto_busca = values["Produto"].upper()
+                    c.execute("SELECT Produto, Valor FROM Produtos WHERE UPPER(Produto) = ?",(produto_busca,))
+                    registros = c.fetchall()
+                    produto_consulta_window["tabela"].update(values=registros)
+                
+                #Editar/Atualizar um registro
+                elif event =="Editar":
+                     selected_row = values['tabela']
+                     if selected_row:
+                          selected_row_index = selected_row[0]
+                          row_data = registros[selected_row_index]
+                          edited_product = sg.popup_get_text("Editar Produto:", default_text=row_data[0])
+                          if edited_product is not None:
+                               old_product = row_data[0]
+                               edit_record(edited_product,row_data[1],old_product)
+                               registros[selected_row_index] = (edited_product,row_data[1])
+                               produto_consulta_window['tabela'].update(values=registros)
+                
+                #Excluir um registro
+                elif event =="Excluir":
+                     selected_row = values['tabela']
+                     if selected_row:
+                          selected_row_index = selected_row[0]
+                          row_data = registros[selected_row_index]
+                          if sg.popup_yes_no("Tem certeza que deseja excluir este registro ?", title="Confirmação") =="Yes":
+                               product_to_delete = row_data[0]
+                               delete_record(product_to_delete)
+                               registros.pop(selected_row_index)
+                               produto_consulta_window["tabela"].update(values=registros)
+                           
+            produto_consulta_window.close() 
+
+   
+    #Relatório de Produtos       
+    elif event == 'Relatório Produtos':
+         
+         #Abre a tela de relatório de Produtos
+         relatorio_layout_produtos = [
+              [sg.Text("Produto")],
+              [sg.InputText(key="Produto")],
+              [sg.Button("Gerar relatório"), sg.Button("Cancelar")]
+         ]
+         relatorio_produtos = sg.Window("Relatório de Produtos", relatorio_layout_produtos, resizable=True)
+         #Loop de eventos
+         while True:
+              event, values = relatorio_produtos.read()
+              if event == sg.WIN_CLOSED or event == "Cancelar":
+                   break
+              #Consulte o banco de dados para obter o produto e gerar o relatório
+              produto_busca = values["Produto"].upper()
+              c.execute("SELECT * FROM Produtos WHERE UPPER(Produto) = ?", (produto_busca,))
+              registro = c.fetchone()
+              if registro:
+                   with open("relatorio.html", "w") as f:
+                        f.write("<html><head></head><body>")
+                        f.write("<h1>Relatório</h1><table border ='1'><tr><th>Produto</th><th>valor</th><tr>")
+                        f.write(f"<tr><td>{registro[0]}</td><td>{registro[1]}</td><tr>")
+                        f.write("</body><html>")
+                   sg.popup("Relatório gerado com sucesso!", title="Relatório")
+
+              else:
+                   sg.popup("Produto não encontrado no banco de dados!", title="Relatório")
+            
+              #Limpar inputs
+              relatorio_produtos["Produto"].upper("")
+         relatorio_produtos.close()
+
+        #CADASTRO DOS FORNECEDORES 
+    elif event == "Cadastrar Fornecedores":
+        
+        #Layout de cadastro dos fornecedores
+         cadastro_fornecedores_layout = [
+            [sg.Text("ID_Fornecedor")],
+            [sg.InputText(key="ID_Fornecedor")],
+            [sg.Text("Nome_Fornecedor")],
+            [sg.InputText(key="Nome_Fornecedor")],
+            [sg.Text("Endereco_Fornecedor")],
+            [sg.InputText(key="Endereco_Fornecedor")],
+            [sg.Text("Telefone_Fornecedor")],
+            [sg.InputText(key="Telefone_Fornecedor")],
+            [sg.Text("Cidade_Fornecedor")],
+            [sg.InputText(key="Cidade_Fornecedor")],
+            [sg.Text("Estado_Fornecedor")],
+            [sg.InputText(key="Estado_Fornecedor")],
+            [sg.Text("Pais_Fornecedor")],
+            [sg.InputText(key="Pais_Fornecedor")],
+            [sg.Button("Cadastrar")],
+            [sg.Button("Cancelar")]
+        ]
+
+         Fornecedores_window = sg.Window("Cadastro de Fornecedores",cadastro_fornecedores_layout,size = (1024,728))
+
+         while True:
+            event, values = Fornecedores_window.read()
+
+            if event == sg.WINDOW_CLOSED or event == 'Cancelar':
+                Fornecedores_window.close()
+                break
+
+            #interação com o banco
+            c.execute("INSERT INTO Fornecedores (ID_Fornecedor, Nome_Fornecedor, Endereco_Fornecedor, Telefone_Fornecedor, Cidade_Fornecedor, Estado_Fornecedor, Pais_Fornecedor) VALUES (?, ?, ?, ?, ?, ?, ?)", (values["ID_Fornecedor"], values["Nome_Fornecedor"], values["Endereco_Fornecedor"], values["Telefone_Fornecedor"], values["Cidade_Fornecedor"], values["Estado_Fornecedor"], values["Pais_Fornecedor"]))
+            conn.commit()
+
+            #Limpar iputs após o cadastro
+            Fornecedores_window["ID_Fornecedor"].update("")
+            Fornecedores_window["Nome_Fornecedor"].update("")
+            Fornecedores_window["Endereco_Fornecedor"].update("")
+            Fornecedores_window["Telefone_Fornecedor"].update("")
+            Fornecedores_window["Cidade_Fornecedor"].update("")
+            Fornecedores_window["Estado_Fornecedor"].update("")
+            Fornecedores_window["Pais_Fornecedor"].update("")
+
+            #configurar o cadastro
+            sg.popup("Cadastro realizado com sucesso!", title="Cadastro")     
+
+     #Tela de consulta dos Fornecedores com UPDATE e DELETE
+    elif event == "Consultar Fornecedores":
+          
+          #Função para atualizar/editar o registro
+          def edit_record(new_supplier, old_supplier):
+                c.execute("UPDATE Fornecedores SET ID_Fornecedor =?, Nome_Fornecedor =? WHERE ID_Fornecedor =?",(new_supplier,old_supplier))
+                conn.commit()
+
+          #Deleta o registro escolhido
+          def delete_record(supplier_to_delete):
+                c.execute("DELETE FROM Fornecedores WHERE ID_Fornecedor =?",(supplier_to_delete,))
+                conn.commit()      
+                
+            #Layout de consulta dos fornecedores
+                consulta_fornecedores_layout = [
+                    [sg.Text("ID_Fornecedor")],
+                    [sg.InputText(key="ID_Fornecedor")],
+                    [sg.Button("Consulta")],
+                    [sg.Button("Cancelar")],
+                    [sg.Table(values=[], headings=["ID_Fornecedor","Nome_Fornecedor"], display_row_numbers=False, num_rows=10, auto_size_columns=False, key="tabela")],
+                    [sg.Button("Editar")],
+                    [sg.Button("Excluir")],
+                    [sg.Button("Cancelar")],  
+                    ] 
+
+                fornecedores_consulta_window = sg.Window("Consulta de Fornecedores", consulta_fornecedores_layout, resizable=True)
+
+            #Loop de eventos
+                while True:
+                    event,values = fornecedores_consulta_window.read()
+
+                    if event == sg.WINDOW_CLOSED or event == "Cancelar":
+                         fornecedores_consulta_window.close()
+                         break
+
+                     #Consultar registros
+                    if event =="Consulta":
+                         fornecedor_busca = values["ID_Fornecedor"].upper()
+                         c.execute("SELECT ID_Fornecedor, Nome_Fornecedor FROM Fornecedores WHERE UPPER(ID_Fornecedor) = ?",(fornecedor_busca,))
+                         registros = c.fetchall()
+                         fornecedores_consulta_window["tabela"].update(values=registros)
+                    
+                    #Editar/atualizar um registro
+                    elif event =="Editar":
+                         selected_row = values['tabela']
+                         if selected_row:
+                              selected_row_index = selected_row[0]
+                              row_data = registros[selected_row_index]
+                              edited_supplier = sg.popup_get_text("Editar Fornecedor:", default_text=row_data[0])
+                              if edited_supplier is not None:
+                                   old_supplier = row_data[0]
+                                   edit_record(edited_supplier,row_data[1],old_supplier)
+                                   registros[selected_row_index] = (edited_supplier, row_data[1])
+                                   fornecedores_consulta_window["tabela"].update(values=registros)
+                   
+                    #Excluir um registro
+                    elif event =="Excluir":
+                         selected_row = values['tabela']
+                         if selected_row:
+                              selected_row_index = selected_row[0]
+                              row_data = registros[selected_row_index]
+                              if sg.popup_yes_no("Tem certeza que deseja excluir este registro ?",title="Confirmação") =="Yes":
+                                   supplier_to_delete = row_data[0]
+                                   delete_record(supplier_to_delete)
+                                   registros.pop(selected_row_index)
+                                   fornecedores_consulta_window['tabela'].update(values=registros)
+
+                fornecedores_consulta_window.close()
+
+    #Relatório dos Fornecedores        
+    elif event == 'Relatório Fornecedores':
+         
+         #Abre a tela de relatório dos Fornecedores
+         relatorio_layout_fornecedores = [
+              [sg.Text("ID_Fornecedor")],
+              [sg.InputText(key="ID_Fornecedor")],
+              [sg.Button("Gerar relatório"), sg.Button("Cancelar")]
+         ]
+         relatorio_fornecedores = sg.Window("Relatório dos Fornecedores", relatorio_layout_fornecedores, resizable=True)
+         #Loop de eventos
+         while True:
+              event, values = relatorio_fornecedores.read()
+              if event == sg.WIN_CLOSED or event == "Cancelar":
+                   break
+              #Consulte o banco de dados para obter os fornecedores e gerar o relatório
+              fornecedor_busca = values["ID_Fornecedor"].upper()
+              c.execute("SELECT * FROM Fornecedores WHERE UPPER(ID_Fornecedor) = ?", (fornecedor_busca,))
+              registro = c.fetchone()
+              if registro:
+                   with open("relatorio.html", "w") as f:
+                        f.write("<html><head></head><body>")
+                        f.write("<h1>Relatório</h1><table border ='1'><tr><th>ID_Fornecedor</th><th>Nome_Fornecedor</th><th>Endereco_Fornecedor</th><th>Telefone_Fornecedor</th><th>Cidade_Fornecedor</th><th>Estado_Fornecedor</th></th>Pais_Fornecedor</th><tr>")
+                        f.write(f"<tr><td>{registro[0]}</td><td>{registro[1]}</td><td>{registro[2]}</td><td>{registro[3]}</td><td>{registro[4]}</td><td>{registro[5]}</td><td>{registro[6]}</td><tr>")
+                        f.write("</body><html>")
+                   sg.popup("Relatório gerado com sucesso!", title="Relatório")
+
+              else:
+                   sg.popup("Fornecedor não encontrado no banco de dados!", title="Relatório")
+            
+              #Limpar inputs
+              relatorio_fornecedores["ID_Fornecedor"].upper("")
+         relatorio_fornecedores.close()            
+
+
+        #CADASTRO DAS TRANSPORTADORAS
+    elif event == "Cadastrar Transportadora":
+
+        #Layout de cadastro das transportadoras
+         cadastro_transportadora_layout = [
+            [sg.Text("ID_Transportadora")],
+            [sg.InputText(key="ID_Transportadora")],
+            [sg.Text("Nome_Transportadora")],
+            [sg.InputText(key="Nome_Transportadora")],
+            [sg.Text("Telefone_Transportadora")],
+            [sg.InputText(key="Telefone_Transportadora")],
+            [sg.Text("Telefone")],
+            [sg.Button("Cadastrar")],
+            [sg.Button("Cancelar")]
+        ]
+
+
+         Transportadora_window = sg.Window ("Cadastro de Transportadoras",cadastro_transportadora_layout,size = (1024,728))
+
+         while True:
+            event, values = Transportadora_window.read()
+
+            if event == sg.WINDOW_CLOSED or event == 'Cancelar':
+                Transportadora_window.close()
+                break
+            
+            #interação com o banco
+            c.execute("INSERT INTO Transportadora (ID_Transportadora, Nome_Transportadora, Telefone_Transportadora) VALUES (?, ?, ? )", (values["ID_Transportadora"], values["Nome_Transportadora"], values["Telefone_Transportadora"]))
+            conn.commit()
+
+            #Limpar iputs após o cadastro
+            Transportadora_window["ID_Transportadora"].update("")
+            Transportadora_window["Nome_Transportadora"].update("")
+            Transportadora_window["Telefone_Transportadora"].update("")
+            
+            #configurar o cadastro
+            sg.popup("Cadastro realizado com sucesso!", title="Cadastro")
+
+        #Consultar Transportadora
+    elif event == "Consultar Transportadora":
+                
+            #Layout de consulta das transportadoras
+                consulta_transportadora_layout = [
+                    [sg.Text("ID_Transportadora")],
+                    [sg.InputText(key="ID_Transportadora")],
+                    [sg.Button("Consulta")],
+                    [sg.Button("Cancelar")],
+                    [sg.Table(values=[], headings=["ID_Transportadora","Nome_Transportadora"], display_row_numbers=False, num_rows=10, auto_size_columns=False, key="tabela")]  
+                    ] 
+
+                consulta_window = sg.Window("Consulta das Transportadoras", consulta_transportadora_layout, resizable=True)
+
+            #Loop de eventos
+                while True:
+                    event,values = consulta_window.read()
+
+                    if event == sg.WINDOW_CLOSED or event == "Cancelar":
+                         consulta_window.close()
+                         break
+
+                     #Operações no banco de dados
+                    nome_busca = values["ID_Transportadora"].upper()
+                    c.execute("SELECT ID_Transportadora, Nome_Transportadora FROM Transportadora WHERE UPPER(ID_Transportadora) = ?",(nome_busca,))
+                    registros = c.fetchall()
+
+                    #Atualizar
+                    tabela = consulta_window["tabela"]
+                    tabela.update(values=registros)
+
+                consulta_window.close()
+
+    elif event == 'Relatório Transportadora':
+          #Abre a tela de relatório da transportadora
+            relatorio_layout_transportadora = [
+                [sg.Text("ID_Transportadora")],
+                [sg.InputText(key="ID_Transportadora")],
+                [sg.Button("Gerar relatório"), sg.Button("Cancelar")]
+            ]
+              
+            relatorio_transportadora = sg.Window("Relatório de Transportadora", relatorio_layout_transportadora, resizable=True)
+            
+            #Loop de eventos
+            while True:
+                 event, values = relatorio_transportadora.read()
+                 if event == sg.WIN_CLOSED or event == 'Cancelar':
+                      break
+                 
+                 #Consulte o banco de dados para obter a transportadora e gerar o relatório
+                 nome_busca = values["ID_Transportadora"].upper()
+                 c.execute("SELECT * FROM Transportadora WHERE UPPER(ID_Transportadora) = ?", (nome_busca,))
+                 registro = c.fetchone()
+                 if registro:
+                      with open("relatorio.html", "w") as f:
+                           f.write("<html><head></head><body>")
+                           f.write(f"<h1>Relatório</h1><table border='1'><tr><th>ID_Transportadora</th><th>Nome_Transportadora</th><th>Telefone_Transportadora</th></tr>")
+                           f.write(f"<tr><td>{registro[0]}</td><td>{registro[1]}</td><td>{registro[2]}</td><tr>")
+                           f.write("</body></html>")
+                      sg.popup("Relatório gerado com sucesso!", title="Relatório")
+                
+                 else:
+                      sg.popup("Transportadora não encontrada no banco de dados!", title="Relatório")
+
+                 #Limpar iputs
+                 relatorio_transportadora["ID_Transportadora"].update("")
+            relatorio_transportadora.close()          
+
+           
+conn.close()
